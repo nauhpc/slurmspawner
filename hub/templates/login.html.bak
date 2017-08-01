@@ -1,0 +1,129 @@
+{% extends "page.html" %}
+
+{% block login_widget %}
+{% endblock %}
+
+{% block main %}
+
+{% block login %}
+<div id="monsoon-login-main" class="container">
+{% if custom_html %}
+{{ custom_html }}
+{% elif login_service %}
+<div class="service-login">
+  <a class='btn  btn-lg' href='{{login_url}}'>
+    Sign in with {{login_service}}
+  </a>
+</div>
+{% else %}
+<script type="text/javascript">
+function toggle_fields() {
+    if (document.getElementById('custom_input').checked) {
+	document.getElementById('custom_settings').style.display = "block";
+    } else {
+	document.getElementById('custom_settings').style.display = "none";
+    }
+}
+</script>
+<img class="img-responsive" src="/static/images/monsoon_logo.png" />
+<form action="{{login_url}}?next={{next}}" method="post" role="form">
+  <div class="auth-form-header">
+    Sign in
+  </div>
+  <div class='auth-form-body'>
+    {% if login_error %}
+    <p class="login_error">
+      {{login_error}}
+    </p>
+    {% endif %}
+    <label for="username_input">Username:</label>
+    <input
+      id="username_input"
+      type="username"
+      autocapitalize="off"
+      autocorrect="off"
+      class="form-control"
+      name="username"
+      val="{{username}}"
+      tabindex="1"
+      autofocus="autofocus"
+    />
+    <label for='password_input'>Password:</label>
+    <input
+      type="password"
+      class="form-control"
+      name="password"
+      id="password_input"
+      tabindex="2"
+    />
+    <label for='custom_input'>Custom Settings</label>
+    <input
+      type="radio"
+      onclick="javascript:toggle_fields();"
+      class="form-control"
+      name="custom"
+      value="Custom Settings"
+      id="custom_input"
+    />
+    <div id="custom_settings" style="display:none">
+    <p>Note: custom settings may cause JupyterHub to take longer to start.</p>
+    <label for='memory_input'>Memory</label>
+    <input
+      type="text"
+      class="form-control"
+      placeholder="in Megabytes"
+      name="memory"
+      id="memory_input"
+    />
+    <label for='cpus_input'>CPUS</label>
+    <input
+      type="text"
+      class="form-control"
+      placeholder="32 max"
+      name="cpus"
+      id="cpus_input"
+    />
+    <label for='tasks_input'>Tasks</label>
+    <input
+      type="text"
+      class="form-control"
+      placeholder="for MPI"
+      name="tasks"
+      id="task_input"
+    />
+    <label for='time_input'>Time</label>
+    <input
+      type="text"
+      class="form-control"
+      placeholder="d-hh:mm:ss"
+      name="time"
+      id="time_input"
+    />
+    <label for='node_input'>Nodes</label>
+    <input
+      type="text"
+      class="form-control"
+      placeholder="32 max"
+      name="node"
+      id="node_input"
+    />
+    </div>
+    <input
+      type="submit"
+      id="login_submit"
+      class='btn '
+      value='Sign In'
+      tabindex="3"
+    />
+  </div>
+</form>
+{% endif %}
+</div>
+{% endblock login %}
+
+{% endblock %}
+
+{% block script %}
+{{super()}}
+
+{% endblock %}
