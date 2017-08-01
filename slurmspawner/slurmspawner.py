@@ -13,6 +13,7 @@ import pwd
 import os
 import time
 import pipes
+import shlex
 from subprocess import Popen, call
 import subprocess
 from string import Template
@@ -28,14 +29,11 @@ from jupyterhub.spawner import Spawner
 from jupyterhub.spawner import set_user_setuid
 from jupyterhub.utils import random_port
 
-
 class SlurmException(Exception):
     pass
 
-
 class SlurmSpawnerException(Exception):
     pass
-
 
 def run_command(cmd):
     popen = subprocess.Popen(cmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
@@ -45,7 +43,6 @@ def run_command(cmd):
     else:
         out = out[0].decode().strip()
         return out
-
 
 class SlurmSpawner(Spawner):
     """A Spawner that just uses Popen to start local processes."""
@@ -75,12 +72,13 @@ class SlurmSpawner(Spawner):
         help="Slurm max time to allow spawner to run (uses Slurm time format of dd-hhh:mm:ss)")
     ntasks = Integer(1, config=True, help="Slurm ntasks for spawner")
     cpus_per_task = Integer(1, config=True, help="Slurm cpus-per-task for spawner")
+    nodes = Integer(1, config=True, help="Slurm number of nodes for spawner")
     qos = Unicode("normal", config=True, help="Slurm QOS to run spawner under")
     job_name = Unicode("spawner-jupyterhub-singleuser", config=True, help="Slurm job name for spawner")
     output = Unicode("/.ipython/jupyterhub-slurmspawner.log", config=True, \
         help="Slurm output file location -- this dir is appended to /home/$USER")
     run_with_sudo = Bool(False, config=True, help="run the sbatch command with sudo instead of just 'sbatch'")
-    
+
     def make_preexec_fn(self, name):
         """make preexec fn"""
         return set_user_setuid(name)
@@ -112,8 +110,8 @@ class SlurmSpawner(Spawner):
         env['HOME'] = pwd.getpwnam(self.user.name).pw_dir
         return env
 
-    def _env_default(self):
-        env = super()._env_default()
+    def get_env(self):
+        env = super().get_env()
         return self.user_env(env)
     
     @gen.coroutine
@@ -216,6 +214,7 @@ class SlurmSpawner(Spawner):
 #SBATCH --job-name=$job_name
 #SBATCH --mem=$mem
 #SBATCH --ntasks=$ntasks
+#SBATCH --nodes=$nodes
 #SBATCH --output=/home/$user/$output
 #SBATCH --partition=$part
 #SBATCH --qos=$qos
@@ -239,14 +238,47 @@ $cmd
         ''')
 
         gid = pwd.getpwnam(user).pw_gid # get group id of user
-        slurm_script = slurm_script.substitute(dict(cpus=self.cpus_per_task,
+
+        form = self.authenticator
+
+        memory = self.mem
+        cpus = self.cpus_per_task
+        ntasks = self.ntasks
+	# Name it stime so it doesnt conflict with the "time" object
+        stime = self.time
+        nodes = self.nodes
+
+        if form.custom:
+            self.log.debug('Changing SlurmSpawner options')
+            if form.memory > 0:
+                memory = form.memory
+            if form.cpus > 0 and form.cpus <= 32:
+                cpus = form.cpus
+            if form.tasks > 0 and form.tasks <= 128:
+                ntasks = form.tasks
+            if form.time:
+                # This is to assure that the string is in a format of INT-INT:INT:INT
+		# We don't want to accept any random strings -- the int() will catch this
+                tokens = form.time.split(':') 
+                days = int(tokens[0].split('-')[0])
+                hours = int(tokens[0].split('-')[1])
+                minutes = int(tokens[1])
+                seconds = int(tokens[2])
+                if days <= 14:
+                    stime = form.time
+            if form.nodes > 0 and form.nodes <= 32:
+                nodes = form.nodes
+            form.custom = False
+
+        slurm_script = slurm_script.substitute(dict(cpus=cpus,
                                                     job_name=self.job_name,
-                                                    mem=self.mem,
-                                                    ntasks=self.ntasks,
+                                                    mem=memory,
+                                                    ntasks=ntasks,
+                                                    nodes=nodes,
                                                     output=self.output,
                                                     part=self.partition,
                                                     qos=self.qos,
-                                                    time=self.time,
+                                                    time=stime,
                                                     sbatch=sbatch,
                                                     export_cmd=export_cmd,
                                                     cmd=cmd,
@@ -377,21 +409,20 @@ $cmd
         self.user.server.port = random_port()
 
         cmd = []
-        env = self.env.copy()
+
+        env = self.get_env()
 
         cmd.extend(self.cmd)
         cmd.extend(self.get_args())
 
-        self.log.debug("Env: %s", str(env))
+        self.log.debug("Env: %s", str(self.get_env()))
         self.log.info("Spawning %s", ' '.join(cmd))
         for k in ["JPY_API_TOKEN"]:
             cmd.insert(0, 'export %s="%s";' % (k, env[k]))
 
         self.db.commit() # added this to test if there is a change in the way jupyterhub is working
 
-        yield self.run_jupyterhub_singleuser(' '.join(cmd),
-                                                      self.user.server.port,
-                                                      self.user.name)
+        yield self.run_jupyterhub_singleuser(' '.join(cmd), self.user.server.port, self.user.name)
 
     @gen.coroutine
     def poll(self):
@@ -437,3 +468,4 @@ $cmd
                 yield self.stop_slurm_job()
         
         self.clear_state()
+
