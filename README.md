@@ -13,6 +13,7 @@ This is a custom spawner for Jupyterhub that is designed for installations on cl
       c = get_config()
       c.JupyterHub.spawner_class = 'slurmspawner.SlurmSpawner'
    ```
+3. move "auth.py" into JupyterHub's directory
 
 ##Configuration
 There are several values you can set in jupyterhub_config.py that override the default Slurm SBATCH options that get submitted by SlurmSpawner. Currently, the variables you can change are:
