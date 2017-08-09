@@ -36,7 +36,15 @@
         margin-top: 10px;
         margin-bottom: -10px;
     }
-	    
+
+    #monsoon-login-main label {
+        margin-top: 10px;
+    }
+
+    #monsoon-login-main label[for=username_input] {
+        margin-top: 0px;
+    }
+
     #custom_label {
 	margin-top: 16px;
     }
